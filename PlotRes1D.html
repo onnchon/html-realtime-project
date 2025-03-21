@@ -21,10 +21,15 @@
             width: 100%;
             height: 500px;
         }
+        #loading-status {
+            margin-bottom: 10px;
+            font-weight: bold;
+        }
     </style>
 </head>
 <body>
     <h1>Interactive Res1D Graph</h1>
+    <div id="loading-status">Loading data...</div>
     <div class="controls">
         <label for="reach">Reach:</label>
         <select id="reach"></select>
@@ -44,13 +49,18 @@
 
         // Base URL for the JSON files on GitHub
         const base_url = 'https://raw.githubusercontent.com/onnchon/html-realtime-project/main/data/';
-        const num_files = 5; // Total number of JSON files
+        const max_files = 20; // Maximum expected number of JSON files
 
         // Function to fetch and process all JSON files
         async function loadData() {
             let all_data = {};
+            let loaded_files = 0; // Counter for loaded files
+            let total_files = 0; // Total number of successfully loaded files
 
-            for (let i = 1; i <= num_files; i++) {
+            const loadingStatus = document.getElementById('loading-status');
+            loadingStatus.textContent = `Loading data...`;
+
+            for (let i = 1; i <= max_files; i++) {
                 const url = `${base_url}res1d_data_${i}.json`;
                 try {
                     const response = await fetch(url);
@@ -62,10 +72,24 @@
 
                     // Merge the data into the global object
                     Object.assign(all_data, data);
+
+                    // Update the loading status
+                    loaded_files++;
+                    total_files++;
+                    loadingStatus.textContent = `Loading data ${loaded_files}/${max_files}`;
                 } catch (error) {
-                    console.error(`Error loading JSON file ${i}:`, error);
-                    alert(`Failed to load JSON file ${i}. Check the browser console for details.`);
+                    console.warn(`File res1d_data_${i}.json not found or failed to load.`);
+                    // Update the loading status to indicate skipped files
+                    loaded_files++;
+                    loadingStatus.textContent = `Loading data ${loaded_files}/${max_files} (skipped some files)`;
                 }
+            }
+
+            // Finalize loading status
+            if (total_files > 0) {
+                loadingStatus.textContent = `Data loading complete (${total_files} files loaded).`;
+            } else {
+                loadingStatus.textContent = `No data files were loaded.`;
             }
 
             // Store the combined data in the global scope
@@ -73,6 +97,11 @@
 
             // Populate the reach dropdown
             const reachDropdown = document.getElementById('reach');
+            if (Object.keys(all_data).length === 0) {
+                alert("No data available. Check the browser console for details.");
+                return;
+            }
+
             Object.keys(all_data).forEach(reach => {
                 const option = document.createElement('option');
                 option.value = reach;
