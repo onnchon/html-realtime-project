@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Res1D Graph</title>
+    <!-- Include Plotly.js -->
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        .controls {
+            margin-bottom: 20px;
+        }
+        .controls select, .controls button {
+            margin-right: 10px;
+        }
+        #graph {
+            width: 100%;
+            height: 500px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Interactive Res1D Graph</h1>
+    <div class="controls">
+        <label for="reach">Reach:</label>
+        <select id="reach"></select>
+
+        <label for="chainage">Chainage:</label>
+        <select id="chainage"></select>
+
+        <button onclick="addToGraph()">Add to Graph</button>
+        <button onclick="clearGraph()">Clear Graph</button>
+        <button onclick="downloadCSV()">Download CSV</button>
+    </div>
+    <div id="graph"></div>
+
+    <script>
+        // Initialize an empty array to store traces
+        let traces = [];
+
+        // Load the JSON data
+        fetch('res1d_data.json')
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! Status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log("JSON data loaded successfully:", data);
+                window.data = data;
+
+                // Populate the reach dropdown
+                const reachDropdown = document.getElementById('reach');
+                Object.keys(data).forEach(reach => {
+                    const option = document.createElement('option');
+                    option.value = reach;
+                    option.textContent = reach;
+                    reachDropdown.appendChild(option);
+                });
+
+                // Update chainage dropdown when reach changes
+                reachDropdown.addEventListener('change', () => {
+                    const chainageDropdown = document.getElementById('chainage');
+                    chainageDropdown.innerHTML = ''; // Clear existing options
+
+                    const selectedReach = reachDropdown.value;
+                    const chainages = Object.keys(data[selectedReach]);
+
+                    chainages.forEach(chainage => {
+                        const option = document.createElement('option');
+                        option.value = chainage;
+                        option.textContent = chainage;
+                        chainageDropdown.appendChild(option);
+                    });
+                });
+
+                // Trigger initial chainage population
+                reachDropdown.dispatchEvent(new Event('change'));
+            })
+            .catch(error => {
+                console.error('Error loading JSON data:', error);
+                alert("Failed to load JSON data. Check the browser console for details.");
+            });
+
+        // Function to add a new trace to the graph
+        function addToGraph() {
+            const reach = document.getElementById('reach').value;
+            const chainage = document.getElementById('chainage').value;
+
+            const reachData = window.data[reach][chainage];
+            if (!reachData) {
+                alert("No data available for the selected reach and chainage.");
+                return;
+            }
+
+            const times = reachData.Time.map(t => new Date(t));
+            const values = reachData.Value;
+
+            // Create a new trace with hover formatting
+            const newTrace = {
+                x: times,
+                y: values,
+                mode: 'lines',
+                name: `${reach}:${chainage}`, // Adjusted trace name format
+                hovertemplate: 'Time: %{x}<br>Discharge: %{y:.2f} m³/s<extra></extra>' // Format hover text
+            };
+
+            // Add the trace to the traces array
+            traces.push(newTrace);
+
+            // Update the graph with all traces
+            updateGraph();
+        }
+
+        // Function to update the graph with all traces
+        function updateGraph() {
+            const graphDiv = document.getElementById('graph');
+            Plotly.newPlot(graphDiv, traces, {
+                title: "Interactive Res1D Graph",
+                xaxis: { title: 'Time' },
+                yaxis: { title: 'Discharge (m³/s)' },
+                template: 'plotly_white'
+            });
+        }
+
+        // Function to clear the graph
+        function clearGraph() {
+            // Clear the traces array
+            traces = [];
+
+            // Clear the graph
+            const graphDiv = document.getElementById('graph');
+            Plotly.newPlot(graphDiv, [], {
+                title: "Interactive Res1D Graph",
+                xaxis: { title: 'Time' },
+                yaxis: { title: 'Discharge (m³/s)' },
+                template: 'plotly_white'
+            });
+        }
+
+        // Function to download the graph data as a CSV file
+        function downloadCSV() {
+            if (traces.length === 0) {
+                alert("No data available to download.");
+                return;
+            }
+
+            // Combine all traces into a single CSV string
+            let csvContent = "data:text/csv;charset=utf-8,";
+
+            // Add header row
+            csvContent += "Discharge (m3/s) at selected location\n";
+            csvContent += "Time";
+
+            // Collect all timestamps and initialize data structure
+            const timeSet = new Set();
+            const traceData = {};
+
+            traces.forEach(trace => {
+                const traceName = trace.name || `Trace`;
+                csvContent += `,${traceName}`; // Use formatted trace name
+                traceData[traceName] = {};
+
+                trace.x.forEach((time, i) => {
+                    const timestamp = formatDate(time); // Format timestamp
+                    timeSet.add(timestamp);
+                    traceData[traceName][timestamp] = trace.y[i].toFixed(2); // Format to two decimal places
+                });
+            });
+
+            csvContent += "\n";
+
+            // Convert the time set to a sorted array
+            const sortedTimes = Array.from(timeSet).sort();
+
+            // Add data rows
+            sortedTimes.forEach(time => {
+                csvContent += `${time}`;
+                traces.forEach(trace => {
+                    const traceName = trace.name || `Trace`;
+                    const value = traceData[traceName][time] || ""; // Use empty string if no value exists
+                    csvContent += `,${value}`;
+                });
+                csvContent += "\n";
+            });
+
+            // Create a Blob from the CSV string
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", "graph_data.csv"); // File name
+            document.body.appendChild(link); // Required for Firefox
+            link.click(); // Trigger the download
+            link.remove(); // Clean up
+        }
+
+        // Helper function to format date as "YYYY-MM-DD HH:mm:ss"
+        function formatDate(date) {
+            const d = new Date(date);
+            const year = d.getFullYear();
+            const month = String(d.getMonth() + 1).padStart(2, '0'); // Months are zero-based
+            const day = String(d.getDate()).padStart(2, '0');
+            const hours = String(d.getHours()).padStart(2, '0');
+            const minutes = String(d.getMinutes()).padStart(2, '0');
+            const seconds = String(d.getSeconds()).padStart(2, '0');
+            return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+        }
+    </script>
+</body>
+</html>
