@@ -42,50 +42,66 @@
         // Initialize an empty array to store traces
         let traces = [];
 
-        // Load the JSON data
-        fetch('https://drive.google.com/uc?export=download&id=13-Ct8i2xzT0d4AhLXH8oeDviyxEynCs7')
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error(`HTTP error! Status: ${response.status}`);
+        // Base URL for the JSON files on GitHub
+        const base_url = 'https://raw.githubusercontent.com/onnchon/html-realtime-project/main/data/';
+        const num_files = 5; // Total number of JSON files
+
+        // Function to fetch and process all JSON files
+        async function loadData() {
+            let all_data = {};
+
+            for (let i = 1; i <= num_files; i++) {
+                const url = `${base_url}res1d_data_${i}.json`;
+                try {
+                    const response = await fetch(url);
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! Status: ${response.status}`);
+                    }
+                    const data = await response.json();
+                    console.log(`Loaded JSON file ${i}:`, data);
+
+                    // Merge the data into the global object
+                    Object.assign(all_data, data);
+                } catch (error) {
+                    console.error(`Error loading JSON file ${i}:`, error);
+                    alert(`Failed to load JSON file ${i}. Check the browser console for details.`);
                 }
-                return response.json();
-            })
-            .then(data => {
-                console.log("JSON data loaded successfully:", data);
-                window.data = data;
+            }
 
-                // Populate the reach dropdown
-                const reachDropdown = document.getElementById('reach');
-                Object.keys(data).forEach(reach => {
-                    const option = document.createElement('option');
-                    option.value = reach;
-                    option.textContent = reach;
-                    reachDropdown.appendChild(option);
-                });
+            // Store the combined data in the global scope
+            window.data = all_data;
 
-                // Update chainage dropdown when reach changes
-                reachDropdown.addEventListener('change', () => {
-                    const chainageDropdown = document.getElementById('chainage');
-                    chainageDropdown.innerHTML = ''; // Clear existing options
-
-                    const selectedReach = reachDropdown.value;
-                    const chainages = Object.keys(data[selectedReach]);
-
-                    chainages.forEach(chainage => {
-                        const option = document.createElement('option');
-                        option.value = chainage;
-                        option.textContent = chainage;
-                        chainageDropdown.appendChild(option);
-                    });
-                });
-
-                // Trigger initial chainage population
-                reachDropdown.dispatchEvent(new Event('change'));
-            })
-            .catch(error => {
-                console.error('Error loading JSON data:', error);
-                alert("Failed to load JSON data. Check the browser console for details.");
+            // Populate the reach dropdown
+            const reachDropdown = document.getElementById('reach');
+            Object.keys(all_data).forEach(reach => {
+                const option = document.createElement('option');
+                option.value = reach;
+                option.textContent = reach;
+                reachDropdown.appendChild(option);
             });
+
+            // Update chainage dropdown when reach changes
+            reachDropdown.addEventListener('change', () => {
+                const chainageDropdown = document.getElementById('chainage');
+                chainageDropdown.innerHTML = ''; // Clear existing options
+
+                const selectedReach = reachDropdown.value;
+                const chainages = Object.keys(all_data[selectedReach]);
+
+                chainages.forEach(chainage => {
+                    const option = document.createElement('option');
+                    option.value = chainage;
+                    option.textContent = chainage;
+                    chainageDropdown.appendChild(option);
+                });
+            });
+
+            // Trigger initial chainage population
+            reachDropdown.dispatchEvent(new Event('change'));
+        }
+
+        // Load the data when the page loads
+        loadData();
 
         // Function to add a new trace to the graph
         function addToGraph() {
